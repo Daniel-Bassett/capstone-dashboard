@@ -210,16 +210,23 @@ with agg_col:
         ######### REVIEWS #########
         filtered_reviews = load_filtered_reviews(fac_ids)
         if map_selection.selection['point_indices']:
-            st.dataframe(
-                (map_df
-                 .iloc[map_selection_idx]
-                 [['google_name', 'average_rating', 'category', 'n_reviews']]
-                 .sort_values(by='average_rating', ascending=False)
+            agg_df = map_df.iloc[map_selection_idx].sort_values(by='average_rating', ascending=False)
+            selected_rows = st.dataframe(
+                (agg_df
+                 [['google_name', 'average_rating', 'category', 'n_reviews', 'facility_id']]
                  .rename(columns={'google_name': 'Restaurant', 'average_rating': 'Google Rating', 'category': 'Category', 'n_reviews': 'Total Reviews'})
                  ),
+                 column_config={'facility_id': None},
                  hide_index=True,
+                 on_select='rerun',
                  selection_mode='multi-row'
             )
-            st.dataframe(filtered_reviews[['text']], hide_index=True)
+            st.write(selected_rows)
+            if selected_rows.selection['rows']:
+                fac_ids_for_reviews = agg_df.iloc[selected_rows.selection['rows']]['facility_id']
+                st.write(filtered_reviews.query('facility_id.isin(@fac_ids_for_reviews)'))
+                st.write(selected_rows.selection['rows'])
+            else:
+                st.dataframe(filtered_reviews[['text']], hide_index=True)
         else:
             st.markdown('# Please make selections on the map.')
