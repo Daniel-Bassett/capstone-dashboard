@@ -153,7 +153,9 @@ with map_col:
 ######### AGGREGATIONS #########
 with agg_col:
     tab1, tab2, tab3 = st.tabs(["📈 Ratings Over Time", ":left_speech_bubble: DeepInsights", ":star: Reviews"])
+
     with tab1:
+        ######### LINE CHART #########
         if map_selection.selection['point_indices']:
             map_selection_idx = map_selection.selection['point_indices']
             fac_ids = map_df.iloc[map_selection_idx]['facility_id'].unique()
@@ -184,7 +186,7 @@ with agg_col:
         )
 
     with tab2:
-        ######## Chat ########
+        ######### CHAT #########
         response_container = st.container(height=600)
         input_container = st.container()
 
@@ -205,6 +207,7 @@ with agg_col:
         
 
     with tab3:
+        ######### REVIEWS #########
         filtered_reviews = load_filtered_reviews(fac_ids)
         if map_selection.selection['point_indices']:
             st.dataframe(
@@ -214,6 +217,9 @@ with agg_col:
                  .sort_values(by='average_rating', ascending=False)
                  .rename(columns={'google_name': 'Restaurant', 'average_rating': 'Google Rating', 'category': 'Category', 'n_reviews': 'Total Reviews'})
                  ),
-                 hide_index=True
+                 hide_index=True,
+                 selection_mode='multi-row'
             )
-        st.write()
+            st.dataframe(filtered_reviews[['text']], hide_index=True)
+        else:
+            st.markdown('# Please make selections on the map.')
