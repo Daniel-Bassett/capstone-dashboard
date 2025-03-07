@@ -53,6 +53,12 @@ nyc_establishments = (establishments
                       )
 
 
+######### SESSION STATES #########
+if 'messages' not in st.session_state:
+    st.session_state['messages'] = []
+    st.session_state['messages'].append({'role': 'assistant', 'content': 'Hi! Please enter your abstract.'})
+
+
 ######### DEFINE FUNCTIONS ######### 
 
 def load_categories():
@@ -144,8 +150,9 @@ with map_col:
         use_container_width=True
         )
 
+######### AGGREGATIONS #########
 with agg_col:
-    tab1, tab2 = st.tabs(["📈 Ratings Over Time", ":star: Reviews"])
+    tab1, tab2, tab3 = st.tabs(["📈 Ratings Over Time", ":left_speech_bubble: DeepInsights", ":star: Reviews"])
     with tab1:
         if map_selection.selection['point_indices']:
             map_selection_idx = map_selection.selection['point_indices']
@@ -177,5 +184,36 @@ with agg_col:
         )
 
     with tab2:
+        ######## Chat ########
+        response_container = st.container(height=600)
+        input_container = st.container()
+
+
+        with input_container:
+            if prompt := st.chat_input('Enter your abstract', max_chars=3000):
+                # with st.chat_message('user'):
+                #     st.write(prompt)
+                st.session_state['messages'].append({'role': 'user', 'content': prompt})
+                # with st.chat_message("assistant"):
+                #     response = st.write(prompt)
+        with response_container:
+            for i, message in enumerate(st.session_state['messages']):
+                with st.chat_message(message['role']):
+                    st.markdown(message['content'])
+
+
+        
+
+    with tab3:
         filtered_reviews = load_filtered_reviews(fac_ids)
-        st.write(filtered_reviews)
+        if map_selection.selection['point_indices']:
+            st.dataframe(
+                (map_df
+                 .iloc[map_selection_idx]
+                 [['google_name', 'average_rating', 'category', 'n_reviews']]
+                 .sort_values(by='average_rating', ascending=False)
+                 .rename(columns={'google_name': 'Restaurant', 'average_rating': 'Google Rating', 'category': 'Category', 'n_reviews': 'Total Reviews'})
+                 ),
+                 hide_index=True
+            )
+        st.write()
