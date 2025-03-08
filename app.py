@@ -7,35 +7,71 @@ import glob
 
 st.set_page_config(layout='wide')
 
-test_kw = ['cozy',
- 'gem',
- 'cute',
- 'incredible',
- 'unique',
- 'ambiance',
- 'hidden',
- 'lovely',
- 'delightful',
- 'phenomenal',
- 'vibes',
- 'creative',
- 'vibe',
+test_kw = ['worst',
+ 'amazing',
  'horrible',
- 'nasty',
- 'inviting',
- 'beautifully',
+ 'delicious',
+ 'bad',
+ 'rude',
+ 'love',
+ 'best',
+ 'friendly',
+ 'order',
+ 'never',
+ 'terrible',
+ 'ordered',
+ 'spot',
+ 'fast',
+ 'money',
+ 'chicken',
+ 'highly',
+ 'favorite',
+ 'restaurant',
+ 'staff',
+ 'fresh',
+ 'ok',
+ 'try',
+ 'asked',
+ 'said',
+ 'excellent',
+ 'la',
+ 'recommend',
+ 'customer',
+ 'definitely',
+ 'minutes',
+ 'super',
+ 'store',
+ 'expensive',
+ 'told',
+ 'muy',
+ 'perfect',
+ 'delivery',
+ 'drinks',
+ 'prices',
+ 'gem',
  'disgusting',
- 'decor',
- 'rich',
- 'balanced',
- 'refreshing',
- 'fantastic',
- 'charming',
- 'ambience',
- 'notch',
- 'recommendations',
- 'worst',
- 'beautiful']
+ 'charge',
+ 'awesome',
+ 'phone',
+ 'wanted',
+ 'gave',
+ 'poor',
+ 'robbed',
+ 'atmosphere',
+ 'called',
+ '50',
+ 'waste',
+ 'le',
+ 'okay',
+ 'sickening',
+ 'corn',
+ 'welcoming',
+ 'garbage',
+ 'stolen',
+ '21',
+ 'shame',
+ 'dinero'
+ ]
 
 test_kw = '|'.join(test_kw)
 review_paths = glob.glob('data/all/reviews/*.parquet')
@@ -90,7 +126,7 @@ def load_filtered_reviews(fac_ids):
     WHERE 
         True
         AND facility_id IN {fac_ids}    
-        AND REGEXP_MATCHES(text, '{test_kw}')
+        -- AND REGEXP_MATCHES(text, '{test_kw}')
         AND text NOT NULL
     """
     return duckdb.query(query).df()
@@ -213,7 +249,7 @@ with agg_col:
             agg_df = map_df.iloc[map_selection_idx].sort_values(by='average_rating', ascending=False)
             selected_rows = st.dataframe(
                 (agg_df
-                 [['google_name', 'average_rating', 'category', 'n_reviews', 'facility_id']]
+                 [['google_name', 'category', 'average_rating', 'n_reviews', 'facility_id']]
                  .rename(columns={'google_name': 'Restaurant', 'average_rating': 'Google Rating', 'category': 'Category', 'n_reviews': 'Total Reviews'})
                  ),
                  column_config={'facility_id': None},
@@ -221,12 +257,22 @@ with agg_col:
                  on_select='rerun',
                  selection_mode='multi-row'
             )
-            st.write(selected_rows)
             if selected_rows.selection['rows']:
-                fac_ids_for_reviews = agg_df.iloc[selected_rows.selection['rows']]['facility_id']
-                st.write(filtered_reviews.query('facility_id.isin(@fac_ids_for_reviews)'))
-                st.write(selected_rows.selection['rows'])
+                agg_df = pd.merge(agg_df.iloc[selected_rows.selection['rows']][['facility_id', 'google_name']], 
+                                  filtered_reviews, 
+                                  left_on='facility_id', 
+                                  right_on='facility_id')
+                st.dataframe(agg_df, hide_index=False, column_config={'facility_id': None, 'google_name': 'Restaurant', 'text': 'review'})
+                st.dataframe(
+                    agg_df
+                    .query('text.str.contains(@test_kw) & rating.isin([1, 5])')
+                    .reset_index(drop=True), 
+                    hide_index=False, 
+                    column_config={'facility_id': None, 'google_name': 'Restaurant', 'text': 'review'}
+                    )
+                # fac_ids_for_reviews = agg_df.iloc[selected_rows.selection['rows']]['facility_id']
+                # st.dataframe(filtered_reviews.query('facility_id.isin(@fac_ids_for_reviews)')[['text', 'rating']], hide_index=True, use_container_width=True)
             else:
-                st.dataframe(filtered_reviews[['text']], hide_index=True)
+                st.dataframe(filtered_reviews[['text', 'rating']], hide_index=True)
         else:
             st.markdown('# Please make selections on the map.')
