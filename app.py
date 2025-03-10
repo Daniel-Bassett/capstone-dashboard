@@ -218,6 +218,9 @@ with agg_col:
                 data_frame=ratings_timeseries,
                 x='year_month',
                 y='rolling_mean'
+            ).update_layout(
+                yaxis=dict(range=[2, 5]),
+                height=600
             )
         )
 
