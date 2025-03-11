@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.express as px
 import polars as pl
 import glob
-import pickle
+import time
 from openai import OpenAI
 
 
@@ -315,7 +315,11 @@ keywords = '|'.join(keywords)
 review_paths = glob.glob('data/all/reviews/*.parquet')
 
 ######### LOAD DATA ######### 
-establishments = pl.scan_parquet('data/all/all_establishments.parquet')
+establishments = (
+    pl.scan_parquet('data/all/all_establishments.parquet')
+    # .filter(pl.col('latitude').is_not_null())
+    # .unique()
+)
 reviews = pl.concat([pl.scan_parquet(path) for path in review_paths])
 nyc_establishments = (establishments
                       .filter(
@@ -323,7 +327,7 @@ nyc_establishments = (establishments
                           & (pl.col('state') == "NY")
                           & (pl.col('longitude').is_not_null())
                           & (pl.col('average_rating').is_not_null())
-                          )
+                        )
                       )
 
 
@@ -390,8 +394,9 @@ def query_llm(review_str):
     )
 
     for chunk in completion:
-        if hasattr(chunk.choices[0].delta, "content"):  # Check if content exists
-            yield chunk.choices[0].delta.content 
+        if hasattr(chunk.choices[0].delta, "content"): 
+            yield chunk.choices[0].delta.content
+            time.sleep(0.02)
 
 
 ######### LAYOUT #########
@@ -492,43 +497,12 @@ with agg_col:
         filtered_reviews = load_filtered_reviews(fac_ids)
         if map_selection.selection['point_indices']:
             agg_df = map_df.iloc[map_selection_idx].sort_values(by='average_rating', ascending=False)
-            # selected_rows = st.dataframe(
-            #     (agg_df
-            #      [['google_name', 'category', 'average_rating', 'n_reviews', 'facility_id']]
-            #      .rename(columns={'google_name': 'Restaurant', 'average_rating': 'Google Rating', 'category': 'Category', 'n_reviews': 'Total Reviews'})
-            #      ),
-            #      column_config={'facility_id': None},
-            #      hide_index=True,
-            #      on_select='rerun',
-            #      selection_mode='multi-row'
-            # )
-            # if selected_rows.selection['rows']:
-            #     agg_df = pd.merge(agg_df.iloc[selected_rows.selection['rows']][['facility_id', 'google_name']], 
-            #                       filtered_reviews, 
-            #                       left_on='facility_id', 
-            #                       right_on='facility_id')
-            #     st.dataframe(agg_df, hide_index=False, column_config={'facility_id': None, 'google_name': 'Restaurant', 'text': 'review'})
-            #     st.dataframe(
-            #         agg_df
-            #         .query('text.str.contains(@keywords) & rating.isin([1, 5])')
-            #         .reset_index(drop=True), 
-            #         hide_index=False, 
-            #         column_config={'facility_id': None, 'google_name': 'Restaurant', 'text': 'review'}
-            #         )
-
 
             agg_df = pd.merge(agg_df[['facility_id', 'google_name']], 
-                                filtered_reviews, 
-                                left_on='facility_id', 
-                                right_on='facility_id')
+                              filtered_reviews, 
+                              left_on='facility_id', 
+                              right_on='facility_id')
             st.dataframe(agg_df, hide_index=False, column_config={'facility_id': None, 'google_name': 'Restaurant', 'text': 'review'})
-            st.dataframe(
-                agg_df
-                .query('text.str.contains(@keywords) & rating.isin([1, 5])')
-                .reset_index(drop=True), 
-                hide_index=False, 
-                column_config={'facility_id': None, 'google_name': 'Restaurant', 'text': 'review'}
-                )
 
             concise_reviews = (
                 reviews
@@ -545,14 +519,16 @@ with agg_col:
                 .filter(pl.col("match_count") > 0)
                 .sort(by='match_ratio', descending=True)
                 .collect()
+                .unique(['facility_id', 'text', 'timestamp', 'rating'])
                 )
 
             st.dataframe(
                 concise_reviews
                 .filter(
                     (True == True)
-                    & (pl.col.match_ratio.is_between(0.0001, 0.01)) 
+                    & (pl.col.match_ratio.is_between(0.0001, 0.02)) 
                 )
+                .unique(['facility_id', 'text', 'timestamp', 'rating'])
                 .with_row_index('id')
             )
             st.dataframe(
@@ -561,6 +537,7 @@ with agg_col:
                     (True == True)
                     & (pl.col.match_ratio.is_between(0.0001, 0.01)) 
                 )
+                .unique(['facility_id', 'text', 'timestamp', 'rating'])
                 .select(pl.col('rating').value_counts())
             )
 
@@ -576,20 +553,12 @@ with agg_col:
         filtered_reviews = load_filtered_reviews(fac_ids)
         if map_selection.selection['point_indices']:
             agg_df = map_df.iloc[map_selection_idx].sort_values(by='average_rating', ascending=False)
-            # st.dataframe(
-            #     (agg_df
-            #      [['google_name', 'category', 'average_rating', 'n_reviews', 'facility_id']]
-            #      .rename(columns={'google_name': 'Restaurant', 'average_rating': 'Google Rating', 'category': 'Category', 'n_reviews': 'Total Reviews'})
-            #      ),
-            #      column_config={'facility_id': None},
-            #      hide_index=True,
-            # )
+ 
 
             agg_df = pd.merge(agg_df[['facility_id', 'google_name']], 
                                 filtered_reviews, 
                                 left_on='facility_id', 
                                 right_on='facility_id')
-            # st.dataframe(agg_df, hide_index=False, column_config={'facility_id': None, 'google_name': 'Restaurant', 'text': 'review'})
 
             tab2_reviews = (
                 reviews
@@ -606,26 +575,8 @@ with agg_col:
                 .filter(pl.col("match_count") > 0)
                 .sort(by='match_ratio', descending=True)
                 .collect()
+                .unique()
                 )
-
-            # st.dataframe(tab2_reviews.with_row_index('id'))
-
-            # st.dataframe(
-            #     tab2_reviews
-            #     .filter(
-            #         (True == True)
-            #         & (pl.col.match_ratio.is_between(0.001, 0.01)) 
-            #     )
-            #     .with_row_index('id')
-            # )
-            # st.dataframe(
-            #     tab2_reviews
-            #     .filter(
-            #         (True == True)
-            #         & (pl.col.match_ratio.is_between(0.0001, 0.01)) 
-            #     )
-            #     .select(pl.col('rating').value_counts())
-            # )
 
             reviews_str = (
                 tab2_reviews
@@ -635,12 +586,10 @@ with agg_col:
                 )
                 .with_columns(reviews_str=pl.concat_str([pl.col('restaurant_name'), pl.col('text')], separator='\n'))
                 .sort(by='rating')
-                .head(500)
+                .unique()
+                .head(700)
                 .select(pl.col('reviews_str').str.join('\n\n').alias('reviews_str'))
-                # .with_row_index('id')
             )
-
-            # st.write(reviews_str)
 
             reviews_str = (
                 tab2_reviews
