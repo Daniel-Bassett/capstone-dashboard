@@ -451,7 +451,7 @@ with map_col:
 
 ######### AGGREGATIONS #########
 with agg_col:
-    tab1, tab2, tab3 = st.tabs(["📈 Ratings Over Time", ":left_speech_bubble: DeepInsights", ":star: Reviews"])
+    tab1, tab2, tab3 = st.tabs(["📈 Ratings Over Time", ":star: Reviews", ":left_speech_bubble: DeepInsights"])
 
     with tab1:
         ######### LINE CHART #########
@@ -488,6 +488,90 @@ with agg_col:
         )
 
     with tab2:
+        ######### REVIEWS #########
+        filtered_reviews = load_filtered_reviews(fac_ids)
+        if map_selection.selection['point_indices']:
+            agg_df = map_df.iloc[map_selection_idx].sort_values(by='average_rating', ascending=False)
+            # selected_rows = st.dataframe(
+            #     (agg_df
+            #      [['google_name', 'category', 'average_rating', 'n_reviews', 'facility_id']]
+            #      .rename(columns={'google_name': 'Restaurant', 'average_rating': 'Google Rating', 'category': 'Category', 'n_reviews': 'Total Reviews'})
+            #      ),
+            #      column_config={'facility_id': None},
+            #      hide_index=True,
+            #      on_select='rerun',
+            #      selection_mode='multi-row'
+            # )
+            # if selected_rows.selection['rows']:
+            #     agg_df = pd.merge(agg_df.iloc[selected_rows.selection['rows']][['facility_id', 'google_name']], 
+            #                       filtered_reviews, 
+            #                       left_on='facility_id', 
+            #                       right_on='facility_id')
+            #     st.dataframe(agg_df, hide_index=False, column_config={'facility_id': None, 'google_name': 'Restaurant', 'text': 'review'})
+            #     st.dataframe(
+            #         agg_df
+            #         .query('text.str.contains(@keywords) & rating.isin([1, 5])')
+            #         .reset_index(drop=True), 
+            #         hide_index=False, 
+            #         column_config={'facility_id': None, 'google_name': 'Restaurant', 'text': 'review'}
+            #         )
+
+
+            agg_df = pd.merge(agg_df[['facility_id', 'google_name']], 
+                                filtered_reviews, 
+                                left_on='facility_id', 
+                                right_on='facility_id')
+            st.dataframe(agg_df, hide_index=False, column_config={'facility_id': None, 'google_name': 'Restaurant', 'text': 'review'})
+            st.dataframe(
+                agg_df
+                .query('text.str.contains(@keywords) & rating.isin([1, 5])')
+                .reset_index(drop=True), 
+                hide_index=False, 
+                column_config={'facility_id': None, 'google_name': 'Restaurant', 'text': 'review'}
+                )
+
+            concise_reviews = (
+                reviews
+                .join(establishments.select('facility_id', 'restaurant_name', 'average_rating'), on='facility_id')
+                .filter(
+                    (True == True)
+                    & pl.col('facility_id').is_in(agg_df['facility_id'].to_list())
+                ) 
+                .head(100000)
+                .with_columns(
+                    pl.sum_horizontal([pl.col("text").str.count_matches(p, literal=False) for p in patterns]).alias("match_count")
+                    )
+                .with_columns((pl.col('match_count') / pl.col('text').str.len_chars()).alias('match_ratio'))
+                .filter(pl.col("match_count") > 0)
+                .sort(by='match_ratio', descending=True)
+                .collect()
+                )
+
+            st.dataframe(
+                concise_reviews
+                .filter(
+                    (True == True)
+                    & (pl.col.match_ratio.is_between(0.0001, 0.01)) 
+                )
+                .with_row_index('id')
+            )
+            st.dataframe(
+                concise_reviews
+                .filter(
+                    (True == True)
+                    & (pl.col.match_ratio.is_between(0.0001, 0.01)) 
+                )
+                .select(pl.col('rating').value_counts())
+            )
+
+            # else:
+            #     st.dataframe(filtered_reviews[['text', 'rating']], hide_index=True)
+        else:
+            st.markdown('# Please make selections on the map.')
+
+        
+
+    with tab3:
         ######### CHAT #########
         filtered_reviews = load_filtered_reviews(fac_ids)
         if map_selection.selection['point_indices']:
@@ -589,89 +673,3 @@ with agg_col:
         #     for i, message in enumerate(st.session_state['messages']):
         #         with st.chat_message(message['role']):
         #             st.markdown(message['content'])
-
-
-        
-
-    with tab3:
-        
-        ######### REVIEWS #########
-        filtered_reviews = load_filtered_reviews(fac_ids)
-        if map_selection.selection['point_indices']:
-            agg_df = map_df.iloc[map_selection_idx].sort_values(by='average_rating', ascending=False)
-            # selected_rows = st.dataframe(
-            #     (agg_df
-            #      [['google_name', 'category', 'average_rating', 'n_reviews', 'facility_id']]
-            #      .rename(columns={'google_name': 'Restaurant', 'average_rating': 'Google Rating', 'category': 'Category', 'n_reviews': 'Total Reviews'})
-            #      ),
-            #      column_config={'facility_id': None},
-            #      hide_index=True,
-            #      on_select='rerun',
-            #      selection_mode='multi-row'
-            # )
-            # if selected_rows.selection['rows']:
-            #     agg_df = pd.merge(agg_df.iloc[selected_rows.selection['rows']][['facility_id', 'google_name']], 
-            #                       filtered_reviews, 
-            #                       left_on='facility_id', 
-            #                       right_on='facility_id')
-            #     st.dataframe(agg_df, hide_index=False, column_config={'facility_id': None, 'google_name': 'Restaurant', 'text': 'review'})
-            #     st.dataframe(
-            #         agg_df
-            #         .query('text.str.contains(@keywords) & rating.isin([1, 5])')
-            #         .reset_index(drop=True), 
-            #         hide_index=False, 
-            #         column_config={'facility_id': None, 'google_name': 'Restaurant', 'text': 'review'}
-            #         )
-
-
-            agg_df = pd.merge(agg_df[['facility_id', 'google_name']], 
-                                filtered_reviews, 
-                                left_on='facility_id', 
-                                right_on='facility_id')
-            st.dataframe(agg_df, hide_index=False, column_config={'facility_id': None, 'google_name': 'Restaurant', 'text': 'review'})
-            st.dataframe(
-                agg_df
-                .query('text.str.contains(@keywords) & rating.isin([1, 5])')
-                .reset_index(drop=True), 
-                hide_index=False, 
-                column_config={'facility_id': None, 'google_name': 'Restaurant', 'text': 'review'}
-                )
-
-            concise_reviews = (
-                reviews
-                .join(establishments.select('facility_id', 'restaurant_name', 'average_rating'), on='facility_id')
-                .filter(
-                    (True == True)
-                    & pl.col('facility_id').is_in(agg_df['facility_id'].to_list())
-                ) 
-                .head(100000)
-                .with_columns(
-                    pl.sum_horizontal([pl.col("text").str.count_matches(p, literal=False) for p in patterns]).alias("match_count")
-                    )
-                .with_columns((pl.col('match_count') / pl.col('text').str.len_chars()).alias('match_ratio'))
-                .filter(pl.col("match_count") > 0)
-                .sort(by='match_ratio', descending=True)
-                .collect()
-                )
-
-            st.dataframe(
-                concise_reviews
-                .filter(
-                    (True == True)
-                    & (pl.col.match_ratio.is_between(0.0001, 0.01)) 
-                )
-                .with_row_index('id')
-            )
-            st.dataframe(
-                concise_reviews
-                .filter(
-                    (True == True)
-                    & (pl.col.match_ratio.is_between(0.0001, 0.01)) 
-                )
-                .select(pl.col('rating').value_counts())
-            )
-
-            # else:
-            #     st.dataframe(filtered_reviews[['text', 'rating']], hide_index=True)
-        else:
-            st.markdown('# Please make selections on the map.')
