@@ -321,14 +321,19 @@ establishments = (
     # .unique()
 )
 reviews = pl.concat([pl.scan_parquet(path) for path in review_paths])
-nyc_establishments = (establishments
-                      .filter(
-                          (True==True)
-                          & (pl.col('state') == "NY")
-                          & (pl.col('longitude').is_not_null())
-                          & (pl.col('average_rating').is_not_null())
-                        )
-                      )
+
+# only return establishments that have reviews available
+valid_fac_ids = reviews.unique('facility_id').select('facility_id').collect()
+nyc_establishments = (
+    establishments
+    .filter(
+        (True==True)
+        & (pl.col('state') == "NY")
+        & (pl.col('longitude').is_not_null())
+        & (pl.col('average_rating').is_not_null())
+        & (pl.col('facility_id').is_in(valid_fac_ids))
+        )
+    )
 
 
 ######### SESSION STATES #########
@@ -374,11 +379,34 @@ def load_filtered_reviews(fac_ids):
     return duckdb.query(query).df()
 
 
+def single_query_llm(review_str):
+    prompt = f"""
+    Tell me the strengths and weaknesses of this places.
+    Give a analysis of what customers like and dislike: {review_str}.
+    """
+    completion = client.chat.completions.create(
+        model='gpt-4o-2024-11-20',
+        # model="o3-mini-2025-01-31",
+        # model='gpt-4o-mini-2024-07-18',
+        messages=[
+            {'role': 'system', "content": "You are an authority on food and beverage establishments. Help me anaylze review texts."},
+            {"role": "user", "content": prompt},
+        ],
+        stream=True
+    )
+
+    for chunk in completion:
+        if hasattr(chunk.choices[0].delta, "content"): 
+            yield chunk.choices[0].delta.content
+            time.sleep(0.02)
+
+
+
 def query_llm(review_str):
     prompt = f"""
     Tell me the strengths and weaknesses of these places. Don't mention specific places. 
-    Give a general analysis of what customers like and dislike: {review_str}. 
-    Then tell me the speicifc best place and why it's the best. Then the specific worst place and why it's the worst.
+    Give a general analysis of what customers like and dislike: {review_str}.
+    Then tell me the speicifc best place by name and why it's the best. Then the specific worst place by name and why it's the worst.
     Then tell me the best strategy to exploit the weaknesses of these places such that I can open my own place nearby and be successful.
     """
 
@@ -601,9 +629,11 @@ with agg_col:
             )
 
             response_container = st.container(height=600)
-            # openai_response = query_llm(reviews_str)
             with response_container:
-                st.write_stream(query_llm(reviews_str))
+                if len(map_selection.selection['point_indices']) == 1:
+                    st.write_stream(single_query_llm(reviews_str))
+                else:
+                    st.write_stream(query_llm(reviews_str))
                 # with st.chat_message('Gordon Ramsay'):
                 #     st.markdown(openai_response)
 
