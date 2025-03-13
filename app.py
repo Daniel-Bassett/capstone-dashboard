@@ -423,11 +423,13 @@ def query_llm(review_str):
 
     for chunk in completion:
         if hasattr(chunk.choices[0].delta, "content"): 
-            yield chunk.choices[0].delta.content
-            time.sleep(0.02)
+            if chunk.choices[0].delta.content is not None:
+                yield chunk.choices[0].delta.content
+                time.sleep(0.02)
 
 
 ######### LAYOUT #########
+st.header('Dishing Out Data: Restaurant Analytics')
 main_filter_col, _ = st.columns([6, 6])
 
 map_col, agg_col = st.columns([6, 6])
